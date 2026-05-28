@@ -1,0 +1,3 @@
+#!/usr/bin/env bash
+cd $(dirname "$0")
+docker run  --network=host --rm  edenhill/kcat:1.7.1 kafkacat -b localhost:9092 "$@"

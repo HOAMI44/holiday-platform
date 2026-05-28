@@ -1,0 +1,252 @@
+x-logging: &default-logging
+  logging:
+    driver: "json-file"
+    options:
+      max-size: "50m"
+      max-file: "3"
+
+services:
+
+  postgres:
+    image: postgres:15
+    container_name: holidayplanner-db
+    <<: *default-logging
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: postgres
+    ports:
+      - "5433:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./docker/init-databases.sh:/docker-entrypoint-initdb.d/init-databases.sh
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  kafka:
+    image: public.ecr.aws/bitnami/kafka:4.2.0
+    platform: linux/amd64
+    <<: *default-logging
+    deploy:
+      resources:
+        limits:
+          pids: 1024
+    volumes:
+      - "./volumes/kafka/data:/bitnami/kafka"
+    user: "0"
+    ports:
+      - "9092:9092"
+    environment:
+      BITNAMI_DEBUG: true
+      KAFKA_CFG_PROCESS_ROLES: 'broker,controller'
+      KAFKA_CFG_NODE_ID: 1
+      KAFKA_KRAFT_CLUSTER_ID: '6L8XGfS3T9Wj4e1_L-5_pQ'
+      KAFKA_CFG_CONTROLLER_QUORUM_BOOTSTRAP_SERVERS: 'kafka:29093'
+      KAFKA_INITIAL_CONTROLLERS: '1@kafka:29093:6L8XGfS3T9Wj4e1_L-5_pQ'
+      KAFKA_CFG_LISTENERS: 'DOCKER://kafka:29092,CONTROLLER://kafka:29093,HOST://0.0.0.0:9092'
+      KAFKA_CFG_ADVERTISED_LISTENERS: 'DOCKER://kafka:29092,HOST://localhost:9092'
+      KAFKA_CFG_LISTENER_SECURITY_PROTOCOL_MAP: 'CONTROLLER:PLAINTEXT,DOCKER:PLAINTEXT,HOST:PLAINTEXT'
+      KAFKA_CFG_INTER_BROKER_LISTENER_NAME: 'DOCKER'
+      KAFKA_CFG_CONTROLLER_LISTENER_NAMES: 'CONTROLLER'
+      ALLOW_PLAINTEXT_LISTENER: "yes"
+      KAFKA_CFG_COMPRESSION_TYPE: gzip
+      KAFKA_CFG_LOG_RETENTION_MS: -1
+      KAFKA_CFG_LOG_RETENTION_BYTES: -1
+      KAFKA_CFG_MESSAGE_TIMESTAMP_TYPE: CreateTime
+      KAFKA_CFG_DELETE_TOPIC_ENABLE: "true"
+      KAFKA_CFG_AUTO_CREATE_TOPICS_ENABLE: "true"
+      KAFKA_CFG_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_CFG_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_CFG_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_CFG_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+    healthcheck:
+      test: ["CMD-SHELL", "kafka-topics.sh --bootstrap-server localhost:9092 --list"]
+      interval: 10s
+      timeout: 10s
+      retries: 10
+      start_period: 30s
+
+  kafkaui:
+    image: docker.redpanda.com/redpandadata/console:latest
+    <<: *default-logging
+    ports:
+      - "5001:5000"
+    environment:
+      KAFKA_BROKERS: "kafka:29092"
+      SERVER_LISTENPORT: "5000"
+    depends_on:
+      kafka:
+        condition: service_healthy
+
+  booking-service:
+    build:
+      context: .
+      dockerfile: booking-service/Dockerfile
+    image: muhiguezel/booking-service:latest
+    <<: *default-logging
+    ports:
+      - "8082:8082"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      kafka:
+        condition: service_started
+      identity-service:
+        condition: service_started
+    environment:
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: booking_db
+      DB_USER: postgres
+      DB_PASSWORD: postgres
+      SERVICES_EVENT_SERVICE_URL: http://event-service:8081
+      IDENTITY_SERVICE_URL: http://identity-service:8083
+      JWT_SECRET: ${JWT_SECRET:-holidayplanner-super-secret-key-that-is-at-least-256-bits-long}
+      SERVICE_SECRET: ${SERVICE_SECRET:-holidayplanner-internal-service-secret}
+
+  event-service:
+    build:
+      context: .
+      dockerfile: event-service/Dockerfile
+    image: muhiguezel/event-service:latest
+    <<: *default-logging
+    ports:
+      - "8081:8081"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      kafka:
+        condition: service_started
+    environment:
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: event_db
+      DB_USER: postgres
+      DB_PASSWORD: postgres
+      JWT_SECRET: ${JWT_SECRET:-holidayplanner-super-secret-key-that-is-at-least-256-bits-long}
+      SERVICE_SECRET: ${SERVICE_SECRET:-holidayplanner-internal-service-secret}
+      NOTIFICATION_SERVICE_URL: http://notification-service:8089
+      BOOKING_SERVICE_URL: http://booking-service:8082
+      IDENTITY_SERVICE_URL: http://identity-service:8083
+
+  identity-service:
+    build:
+      context: .
+      dockerfile: identity-service/Dockerfile
+    image: muhiguezel/identity-service:latest
+    <<: *default-logging
+    ports:
+      - "8083:8083"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      kafka:
+        condition: service_started
+    environment:
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: identity_db
+      DB_USER: postgres
+      DB_PASSWORD: postgres
+      JWT_SECRET: ${JWT_SECRET:-holidayplanner-super-secret-key-that-is-at-least-256-bits-long}
+      SERVICE_SECRET: ${SERVICE_SECRET:-holidayplanner-internal-service-secret}
+      BOOKING_SERVICE_URL: http://booking-service:8082
+
+  organization-service:
+    build:
+      context: .
+      dockerfile: organization-service/Dockerfile
+    image: muhiguezel/organization-service:latest
+    <<: *default-logging
+    ports:
+      - "8084:8084"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      kafka:
+        condition: service_started
+    environment:
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      DB_HOST: postgres
+      DB_NAME: organization_db
+      DB_USER: postgres
+      DB_PASSWORD: postgres
+      JWT_SECRET: ${JWT_SECRET:-holidayplanner-super-secret-key-that-is-at-least-256-bits-long}
+      EVENT_SERVICE_URL: http://event-service:8081
+      SERVICE_SECRET: ${SERVICE_SECRET:-holidayplanner-internal-service-secret}
+      IDENTITY_SERVICE_URL: http://identity-service:8083
+
+  payment-service:
+    build:
+      context: .
+      dockerfile: payment-service/Dockerfile
+    image: muhiguezel/payment-service:latest
+    <<: *default-logging
+    ports:
+      - "8085:8085"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      kafka:
+        condition: service_started
+    environment:
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      DB_HOST: postgres
+      DB_NAME: payment_db
+      DB_USER: postgres
+      DB_PASSWORD: postgres
+      JWT_SECRET: ${JWT_SECRET:-holidayplanner-super-secret-key-that-is-at-least-256-bits-long}
+      SERVICE_SECRET: ${SERVICE_SECRET:-holidayplanner-internal-service-secret}
+      SERVICES_EVENT_SERVICE_URL: http://event-service:8081
+      SERVICES_BOOKING_SERVICE_URL: http://booking-service:8082
+
+  notification-service:
+    build:
+      context: .
+      dockerfile: notification-service/Dockerfile
+    image: muhiguezel/notification-service:latest
+    <<: *default-logging
+    ports:
+      - "8090:8089"
+    depends_on:
+      kafka:
+        condition: service_started
+    environment:
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      MAIL_HOST: ${MAIL_HOST:-smtp.gmail.com}
+      MAIL_PORT: ${MAIL_PORT:-587}
+      MAIL_USERNAME: ${MAIL_USERNAME:-your-email@gmail.com}
+      MAIL_PASSWORD: ${MAIL_PASSWORD:-your-password}
+      JWT_SECRET: ${JWT_SECRET:-holidayplanner-super-secret-key-that-is-at-least-256-bits-long}
+      SERVICE_SECRET: ${SERVICE_SECRET:-holidayplanner-internal-service-secret}
+
+  booklet-service:
+    build:
+      context: .
+      dockerfile: booklet-service/Dockerfile
+    image: muhiguezel/booklet-service:latest
+    <<: *default-logging
+    ports:
+      - "8087:8087"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DB_HOST: postgres
+      DB_NAME: booklet_db
+      DB_USER: postgres
+      DB_PASSWORD: postgres
+      JWT_SECRET: ${JWT_SECRET:-holidayplanner-super-secret-key-that-is-at-least-256-bits-long}
+      SERVICE_SECRET: ${SERVICE_SECRET:-holidayplanner-internal-service-secret}
+      SERVICES_ORGANIZATION_SERVICE_URL: http://organization-service:8084
+      SERVICES_EVENT_SERVICE_URL: http://event-service:8081
+
+volumes:
+  postgres_data:
+  kafka_data:

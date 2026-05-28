@@ -1,0 +1,52 @@
+spring:
+  application:
+    name: event-service
+
+  datasource:
+    # Default 5433 matches docker-compose host mapping (5433:5432). Override DB_PORT=5432 for a local Postgres on 5432.
+    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5433}/${DB_NAME:event_db}
+    username: ${DB_USER:postgres}
+    password: ${DB_PASSWORD:postgres}
+    driver-class-name: org.postgresql.Driver
+
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: true
+    properties:
+      hibernate:
+        format_sql: true
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+
+  kafka:
+    bootstrap-servers: ${SPRING_KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.apache.kafka.common.serialization.StringSerializer
+    consumer:
+      group-id: event-service
+      auto-offset-reset: earliest
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+
+server:
+  port: 8081
+
+jwt:
+  secret: ${JWT_SECRET:holidayplanner-super-secret-key-that-is-at-least-256-bits-long}
+
+service:
+  secret: ${SERVICE_SECRET:holidayplanner-internal-service-secret}
+
+services:
+  booking-service:
+    url: ${BOOKING_SERVICE_URL:http://localhost:8082}
+  identity-service:
+    url: ${IDENTITY_SERVICE_URL:http://localhost:8083}
+  notification-service:
+    url: ${NOTIFICATION_SERVICE_URL:http://localhost:8089}
+
+event-service:
+  scheduler:
+    auto-cancel-cron: ${EVENT_AUTO_CANCEL_CRON:0 0 3 * * *}
+    day-before-cron: ${EVENT_DAY_BEFORE_CRON:0 15 2 * * *}
