@@ -254,3 +254,36 @@ CLAUDE.md
 CLAUDE_CODE_CONTEXT.md
 PROGRESS*.md
 docs/TEAM_STATUS.md
+
+.env
+
+# .net
+# .NET
+bin/
+obj/
+
+# Rider
+.idea/
+
+# User specific
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+
+# ASP.NET
+appsettings.Development.json
+
+# Entity Framework
+*.dbmdl
+
+# NuGet
+*.nupkg
+.nuget/
+
+# Test Results
+TestResults/
+
+# Logs
+logs/
+*.log

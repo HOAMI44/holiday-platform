@@ -76,6 +76,9 @@ public class BookingCommandService {
     }
 
     public BookingResponse cancelBooking(UUID bookingId) {
+        if(bookingId == null){
+            throw new IllegalArgumentException("Booking ID cannot be null");
+        }
 
         Booking booking = bookingRepository.findById(bookingId)
                 .orElseThrow(() -> new BookingNotFoundException(bookingId)); // orElse Throw catches empty returns and

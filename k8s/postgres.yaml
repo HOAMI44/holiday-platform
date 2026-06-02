@@ -1,0 +1,101 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres
+  namespace: holiday-platform
+spec:
+  selector:
+    app: postgres
+  ports:
+    - port: 5432
+      targetPort: 5432
+      name: postgres
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: postgres-init-script
+  namespace: holiday-platform
+data:
+  init-databases.sh: |-
+    #!/bin/bash
+    set -e
+    psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" <<'EOSQL'
+    SELECT 'CREATE DATABASE booking_db' WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname='booking_db')\gexec
+    SELECT 'CREATE DATABASE event_db' WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname='event_db')\gexec
+    SELECT 'CREATE DATABASE identity_db' WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname='identity_db')\gexec
+    SELECT 'CREATE DATABASE organization_db' WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname='organization_db')\gexec
+    SELECT 'CREATE DATABASE payment_db' WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname='payment_db')\gexec
+    SELECT 'CREATE DATABASE booklet_db' WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname='booklet_db')\gexec
+    EOSQL
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: postgres
+  namespace: holiday-platform
+spec:
+  serviceName: postgres
+  replicas: 1
+  selector:
+    matchLabels:
+      app: postgres
+  template:
+    metadata:
+      labels:
+        app: postgres
+    spec:
+      containers:
+        - name: postgres
+          image: postgres:15
+          ports:
+            - containerPort: 5432
+              name: postgres
+          env:
+            - name: POSTGRES_USER
+              value: postgres
+            - name: POSTGRES_PASSWORD
+              value: postgres
+            - name: POSTGRES_DB
+              value: postgres
+              # Dateien werden zu laufzeit an den pod gehängt
+          volumeMounts:
+            - name: postgres-data
+              mountPath: /var/lib/postgresql/data
+            - name: postgres-init-script
+            #Spezieller Pfad bei neuen postgres images werden datein dort drinnen beim start der datenbank automatisch ausgeführt
+              mountPath: /docker-entrypoint-initdb.d/init-databases.sh
+              #mount nur diese eine datei nicht den ganzen configMAp Ordner
+              subPath: init-databases.sh
+              # prüfung ob der pod bereits ist , traffix zu bekommen, kubernetes fraget den cotnaienr regelmäßig ab
+          readinessProbe:
+            exec:
+              command:
+                - sh
+                - -c
+                # prüfut ob PostgreSQL auf verbidnungen hört
+                - pg_isready -U postgres
+                # erste prüfung startet nach 10 sekunden anch pod start
+            initialDelaySeconds: 10
+            # alle 5 sec neu prüfen
+            periodSeconds: 5
+            # prüfung darf höchstens 5 sec dauertn
+            timeoutSeconds: 5
+            # nach 6 fehlgeschalgenen checks gilt der pod als nicht ready
+            failureThreshold: 6
+            # mountet die configMao aus dem Pod welches wir mit volumeMounts definiert haben, damit die datenbank beim start die init-databases.sh ausführt
+      volumes:
+      # configmap > Pod > Container
+        - name: postgres-init-script
+          configMap:
+            name: postgres-init-script
+            # 5GB Volume, persistenter speciehr, extra option ist aber schon im pod drinnen durch volumeMount
+  volumeClaimTemplates:
+    - metadata:
+        name: postgres-data
+      spec:
+        accessModes:
+          - ReadWriteOnce
+        resources:
+          requests:
+            storage: 5Gi
