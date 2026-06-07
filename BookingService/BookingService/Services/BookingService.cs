@@ -18,7 +18,7 @@ public interface IBookingService
     Task<EventTermSummaryResponse> GetEventTermSummaryAsync(Guid eventTermId);
     Task<List<BookingResponse>> GetBookingsForFamilyMemberAsync(Guid familyMemberId);
     Task<List<BookingDetailResponse>> GetBookingsForFamilyMemberEnrichedAsync(Guid familyMemberId);
-    Task<BookingResponse> CreateBookingAsync(Guid familyMemberId, Guid eventTermId);
+    Task<BookingResponse> CreateBookingAsync(Guid familyMemberId, Guid eventTermId, string? parentEmail);
     Task<BookingResponse> CancelBookingAsync(Guid bookingId);
     Task CancelAllBookingsAsync(Guid eventTermId);
 }
@@ -99,7 +99,7 @@ public class BookingServiceImpl : IBookingService
         return bookings.Select(b => BookingDetailResponse.From(b)).ToList();
     }
 
-    public async Task<BookingResponse> CreateBookingAsync(Guid familyMemberId, Guid eventTermId)
+    public async Task<BookingResponse> CreateBookingAsync(Guid familyMemberId, Guid eventTermId, string? parentEmail)
     {
         var eventTerm = await _eventServiceClient.GetEventTermAsync(eventTermId);
 
@@ -108,30 +108,24 @@ public class BookingServiceImpl : IBookingService
             throw new InvalidOperationException($"Event term is not active: {eventTermId}");
         }
 
-        var confirmedCount = await _bookingRepository.CountByEventTermIdAndStatusAsync(eventTermId, BookingStatus.CONFIRMED);
-
         var booking = new Booking
         {
             FamilyMemberId = familyMemberId,
             EventTermId = eventTermId,
-            Status = confirmedCount < eventTerm.MaxParticipants 
-                ? BookingStatus.CONFIRMED 
-                : BookingStatus.WAITLISTED
+            Status = BookingStatus.PENDING
         };
 
         var saved = await _bookingRepository.AddAsync(booking);
 
-        if (booking.Status == BookingStatus.CONFIRMED)
+        var requestedPayload = new BookingRequestedPayload
         {
-            var payload = new BookingCreatedPayload
-            {
-                BookingId = saved.Id,
-                FamilyMemberId = saved.FamilyMemberId,
-                EventTermId = saved.EventTermId,
-                Status = BookingStatus.CONFIRMED.ToString()
-            };
-            await _bookingEventProducer.PublishBookingCreatedAsync(payload);
-        }
+            BookingId = saved.Id,
+            FamilyMemberId = saved.FamilyMemberId,
+            EventTermId = saved.EventTermId,
+            Status = saved.Status.ToString(),
+            ParentEmail = parentEmail
+        };
+        await _bookingEventProducer.PublishBookingRequestedAsync(requestedPayload);
 
         return BookingResponse.From(saved);
     }

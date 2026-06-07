@@ -7,6 +7,8 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
+// Wird gebraucht um den akteullen benutzer zu finden um dann desen bearer token für die weitergabe an die clients zu nutzen
+builder.Services.AddHttpContextAccessor();
 
 // Add application services and configuration
 builder.Services.AddApplicationServices(builder.Configuration);

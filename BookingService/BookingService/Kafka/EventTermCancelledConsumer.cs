@@ -31,11 +31,12 @@ public class EventTermCancelledConsumer : BackgroundService
         };
 
         _consumer = new ConsumerBuilder<string, string>(consumerConfig).Build();
-        _consumer.Subscribe(new[] { "holiday-planner.event-term.cancelled" });
+        _consumer.Subscribe(new[] { "holiday-planner.event.term-cancelled" });
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
+        await Task.Yield();
         _logger.LogInformation("EventTermCancelledConsumer starting...");
 
         try

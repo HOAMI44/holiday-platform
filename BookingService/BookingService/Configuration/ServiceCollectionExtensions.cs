@@ -2,10 +2,12 @@ using Microsoft.OpenApi.Models;
 
 namespace BookingService.Configuration;
 
+using BookingService.Auth;
 using BookingService.Repositories;
 using BookingService.Services;
 using BookingService.Kafka;
 using Confluent.Kafka;
+using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
@@ -55,6 +57,7 @@ public static class ServiceCollectionExtensions
 
         services.AddScoped<IBookingEventProducer, BookingEventProducer>();
         services.AddHostedService<EventTermCancelledConsumer>();
+        services.AddHostedService<BookingDecisionConsumer>();
     }
 
     private static void AddHttpClients(IServiceCollection services, IConfiguration configuration)
@@ -73,17 +76,30 @@ public static class ServiceCollectionExtensions
             client.BaseAddress = new Uri(identityServiceUrl);
             client.Timeout = TimeSpan.FromSeconds(30);
         });
+        
+        
     }
 
     private static void AddAuthentication(IServiceCollection services, IConfiguration configuration)
     {
         var jwtSecret = configuration["Jwt:Secret"] ?? "holidayplanner-local-test-secret";
-        var identityServiceUrl = configuration["Services:IdentityService:Url"] ?? "http://identity-service:8083";
 
-        services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+        services.AddAuthentication(options =>
+            {
+                options.DefaultAuthenticateScheme = "Combined";
+                options.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
+            })
+            .AddPolicyScheme("Combined", "Combined", options =>
+            {
+                options.ForwardDefaultSelector = ctx =>
+                    ctx.Request.Headers.ContainsKey("X-Service-Secret")
+                        ? ServiceKeyAuthHandler.SchemeName
+                        : JwtBearerDefaults.AuthenticationScheme;
+            })
+            .AddScheme<AuthenticationSchemeOptions, ServiceKeyAuthHandler>(ServiceKeyAuthHandler.SchemeName, null)
             .AddJwtBearer(options =>
             {
-                options.RequireHttpsMetadata = false; // Allow HTTP in development
+                options.RequireHttpsMetadata = false;
                 options.TokenValidationParameters = new TokenValidationParameters
                 {
                     ValidateIssuerSigningKey = true,

@@ -6,10 +6,12 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Authorization;
 using System;
 using System.Collections.Generic;
+using System.Security.Claims;
 using System.Threading.Tasks;
 
 [ApiController]
 [Route("api/bookings")]
+[Authorize]
 public class BookingController : ControllerBase
 {
     private readonly IBookingService _bookingService;
@@ -20,8 +22,9 @@ public class BookingController : ControllerBase
         _bookingService = bookingService;
         _logger = logger;
     }
-
+    
     [HttpGet("health")]
+    [AllowAnonymous]
     public ActionResult<string> Health()
     {
         return Ok("BookingService is running!");
@@ -133,14 +136,15 @@ public class BookingController : ControllerBase
     }
 
     [HttpPost]
-    [Authorize(Roles = "USER,EVENT_OWNER,ORGANIZATION_TEAM_MEMBER")]
+    [Authorize(Roles = "ADMIN,USER,EVENT_OWNER,ORGANIZATION_TEAM_MEMBER")]
     public async Task<ActionResult<BookingResponse>> CreateBooking(
         [FromQuery] Guid familyMemberId,
         [FromQuery] Guid eventTermId)
     {
         try
         {
-            var booking = await _bookingService.CreateBookingAsync(familyMemberId, eventTermId);
+            var parentEmail = User.FindFirst("email")?.Value ?? User.FindFirst(ClaimTypes.Email)?.Value;
+            var booking = await _bookingService.CreateBookingAsync(familyMemberId, eventTermId, parentEmail);
             return Created(new Uri($"/api/bookings/{booking.Id}", UriKind.Relative), booking);
         }
         catch (InvalidOperationException ex)

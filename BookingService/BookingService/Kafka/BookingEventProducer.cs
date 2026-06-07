@@ -29,6 +29,7 @@ public class KafkaEnvelope<T>
 
 public interface IBookingEventProducer
 {
+    Task PublishBookingRequestedAsync(BookingRequestedPayload payload);
     Task PublishBookingCreatedAsync(BookingCreatedPayload payload);
     Task PublishBookingCancelledAsync(BookingCancelledPayload payload);
     Task PublishWaitlistPromotedAsync(WaitListPromotedPayload payload);
@@ -38,11 +39,43 @@ public class BookingEventProducer : IBookingEventProducer
 {
     private readonly IProducer<string, string> _producer;
     private readonly ILogger<BookingEventProducer> _logger;
+    private static readonly JsonSerializerOptions JsonOptions = new()
+    {
+        // Use camelCase for JSON properties for java compatibility
+        PropertyNamingPolicy = JsonNamingPolicy.CamelCase
+    };
 
     public BookingEventProducer(IProducer<string, string> producer, ILogger<BookingEventProducer> logger)
     {
         _producer = producer;
         _logger = logger;
+    }
+
+    public async Task PublishBookingRequestedAsync(BookingRequestedPayload payload)
+    {
+        try
+        {
+            var envelope = new KafkaEnvelope<BookingRequestedPayload>(
+                "BookingRequested",
+                "1",
+                DateTime.UtcNow.ToString("O"),
+                "booking-service",
+                payload
+            );
+
+            var json = JsonSerializer.Serialize(envelope, JsonOptions);
+            var message = new Message<string, string>
+            {
+                Key = payload.BookingId.ToString(),
+                Value = json
+            };
+
+            await _producer.ProduceAsync("holiday-planner.booking.requested", message);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to publish BookingRequested event");
+        }
     }
 
     public async Task PublishBookingCreatedAsync(BookingCreatedPayload payload)
@@ -57,7 +90,7 @@ public class BookingEventProducer : IBookingEventProducer
                 payload
             );
 
-            var json = JsonSerializer.Serialize(envelope);
+            var json = JsonSerializer.Serialize(envelope, JsonOptions);
             var message = new Message<string, string>
             {
                 Key = payload.BookingId.ToString(),
@@ -84,7 +117,7 @@ public class BookingEventProducer : IBookingEventProducer
                 payload
             );
 
-            var json = JsonSerializer.Serialize(envelope);
+            var json = JsonSerializer.Serialize(envelope, JsonOptions);
             var message = new Message<string, string>
             {
                 Key = payload.BookingId.ToString(),
@@ -111,7 +144,7 @@ public class BookingEventProducer : IBookingEventProducer
                 payload
             );
 
-            var json = JsonSerializer.Serialize(envelope);
+            var json = JsonSerializer.Serialize(envelope, JsonOptions);
             var message = new Message<string, string>
             {
                 Key = payload.BookingId.ToString(),

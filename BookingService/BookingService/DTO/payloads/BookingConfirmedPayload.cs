@@ -1,6 +1,6 @@
 namespace BookingService.DTO.payloads;
 
-public class BookingCreatedPayload
+public class BookingConfirmedPayload
 {
     public Guid BookingId { get; set; }
     public Guid FamilyMemberId { get; set; }
