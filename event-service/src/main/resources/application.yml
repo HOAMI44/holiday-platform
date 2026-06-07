@@ -33,14 +33,14 @@ server:
   port: 8081
 
 jwt:
-  secret: ${JWT_SECRET:holidayplanner-super-secret-key-that-is-at-least-256-bits-long}
+  secret: ${JWT_SECRET:holidayplanner-local-test-secret}
 
 service:
-  secret: ${SERVICE_SECRET:holidayplanner-internal-service-secret}
+  secret: ${SERVICE_SECRET:holidayplanner-local-service-secret}
 
 services:
   booking-service:
-    url: ${BOOKING_SERVICE_URL:http://localhost:8082}
+    url: ${BOOKING_SERVICE_URL:http://localhost:5177}
   identity-service:
     url: ${IDENTITY_SERVICE_URL:http://localhost:8083}
   notification-service:

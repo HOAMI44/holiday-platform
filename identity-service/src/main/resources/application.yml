@@ -35,7 +35,7 @@ server:
 
 # JWT Configuration
 jwt:
-  secret: ${JWT_SECRET:holidayplanner-super-secret-key-that-is-at-least-256-bits-long}
+  secret: ${JWT_SECRET:holidayplanner-local-test-secret}
   expiration-ms: 86400000  # 24 hours
 
 # Inter-service communication URLs
@@ -44,4 +44,4 @@ services:
     url: ${BOOKING_SERVICE_URL:http://localhost:8082}
 
 service:
-  secret: ${SERVICE_SECRET:holidayplanner-internal-service-secret}
+  secret: ${SERVICE_SECRET:holidayplanner-local-service-secret}
