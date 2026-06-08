@@ -10,7 +10,7 @@ RUN dotnet restore "BookingService/BookingService.csproj"
 COPY . .
 
 # Build and publish
-RUN dotnet publish "BookingService/BookingService.csproj" -c Release -o /app/publish --no-restore
+RUN dotnet publish "BookingService/BookingService.csproj" -c Release -o /app/publish
 
 # Runtime stage
 FROM mcr.microsoft.com/dotnet/aspnet:8.0
