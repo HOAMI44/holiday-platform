@@ -80,6 +80,45 @@ services:
     depends_on:
       kafka:
         condition: service_healthy
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]  #Test ob redis läuft healthcheck
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  booking-service-dotnet:
+    build:
+      context: ./BookingService
+      dockerfile: BookingService/Dockerfile
+    image: holiday-planner/booking-service-dotnet:latest
+    <<: *default-logging
+    ports:
+      - "5177:8082"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      kafka:
+        condition: service_started
+      redis:
+        condition: service_healthy
+      event-service:
+        condition: service_started
+      identity-service:
+        condition: service_started
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      ConnectionStrings__DefaultConnection: "Server=postgres;Port=5432;Database=booking_db;User Id=postgres;Password=postgres;"
+      Kafka__BootstrapServers: kafka:29092
+      Services__EventService__Url: http://event-service:8081
+      Services__IdentityService__Url: http://identity-service:8083
+      Jwt__Secret: ${JWT_SECRET:-holidayplanner-local-test-secret}
+      Service__Secret: ${SERVICE_SECRET:-holidayplanner-local-service-secret}
+      Redis__ConnectionString: redis:6379
+
   booking-service:
     build:
       context: .
