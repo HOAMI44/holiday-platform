@@ -45,6 +45,8 @@ spec:
               value: http://identity-service:8083
             - name: Jwt__Secret
               value: holidayplanner-local-test-secret
+            - name: Redis__ConnectionString
+              value: redis:6379
           livenessProbe:
             httpGet:
               path: /api/bookings/health
