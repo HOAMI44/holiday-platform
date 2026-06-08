@@ -35,6 +35,10 @@ public static class ServiceCollectionExtensions
         // HTTP Clients
         AddHttpClients(services, configuration);
 
+        // Redis Cache
+        var redisConnection = configuration["Redis:ConnectionString"] ?? "localhost:6379";
+        services.AddStackExchangeRedisCache(options => options.Configuration = redisConnection);
+
         // Authentication
         AddAuthentication(services, configuration);
         

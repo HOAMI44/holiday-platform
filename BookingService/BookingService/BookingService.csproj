@@ -19,6 +19,7 @@
         <PackageReference Include="System.IdentityModel.Tokens.Jwt" Version="7.0.3" />
         <PackageReference Include="Confluent.Kafka" Version="2.3.0" />
         <PackageReference Include="Microsoft.AspNetCore.Authorization" Version="8.0.0" />
+        <PackageReference Include="Microsoft.Extensions.Caching.StackExchangeRedis" Version="8.0.0" />
     </ItemGroup>
 
 </Project>
