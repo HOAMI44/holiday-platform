@@ -1,5 +1,7 @@
 using BookingService.Configuration;
 using Microsoft.EntityFrameworkCore;
+using OpenTelemetry.Resources;
+using OpenTelemetry.Trace;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -7,6 +9,16 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
+
+builder.Services.AddOpenTelemetry()
+    .WithTracing(tracing => tracing
+        .SetResourceBuilder(ResourceBuilder.CreateDefault().AddService("booking-service-dotnet"))
+        .AddAspNetCoreInstrumentation()
+        .AddHttpClientInstrumentation()
+        .AddOtlpExporter(o =>
+        {
+            o.Endpoint = new Uri($"{builder.Configuration["Tempo:Endpoint"] ?? "http://localhost:4318"}/v1/traces");
+        }));
 // Wird gebraucht um den akteullen benutzer zu finden um dann desen bearer token für die weitergabe an die clients zu nutzen
 builder.Services.AddHttpContextAccessor();
 
