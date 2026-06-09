@@ -4,7 +4,6 @@ namespace BookingService.Kafka;
 
 using Confluent.Kafka;
 using System.Text.Json;
-using BookingService.Services;
 using Microsoft.Extensions.Logging;
 
 public class KafkaEnvelope<T>
@@ -29,7 +28,6 @@ public class KafkaEnvelope<T>
 
 public interface IBookingEventProducer
 {
-    Task PublishBookingRequestedAsync(BookingRequestedPayload payload);
     Task PublishBookingCreatedAsync(BookingCreatedPayload payload);
     Task PublishBookingCancelledAsync(BookingCancelledPayload payload);
     Task PublishWaitlistPromotedAsync(WaitListPromotedPayload payload);
@@ -49,33 +47,6 @@ public class BookingEventProducer : IBookingEventProducer
     {
         _producer = producer;
         _logger = logger;
-    }
-
-    public async Task PublishBookingRequestedAsync(BookingRequestedPayload payload)
-    {
-        try
-        {
-            var envelope = new KafkaEnvelope<BookingRequestedPayload>(
-                "BookingRequested",
-                "1",
-                DateTime.UtcNow.ToString("O"),
-                "booking-service",
-                payload
-            );
-
-            var json = JsonSerializer.Serialize(envelope, JsonOptions);
-            var message = new Message<string, string>
-            {
-                Key = payload.BookingId.ToString(),
-                Value = json
-            };
-
-            await _producer.ProduceAsync("holiday-planner.booking.requested", message);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Failed to publish BookingRequested event");
-        }
     }
 
     public async Task PublishBookingCreatedAsync(BookingCreatedPayload payload)

@@ -101,31 +101,37 @@ public class BookingServiceImpl : IBookingService
 
     public async Task<BookingResponse> CreateBookingAsync(Guid familyMemberId, Guid eventTermId, string? parentEmail)
     {
+        //Caching in GetEventTerm
         var eventTerm = await _eventServiceClient.GetEventTermAsync(eventTermId);
 
         if (eventTerm.Status != "ACTIVE")
-        {
             throw new InvalidOperationException($"Event term is not active: {eventTermId}");
-        }
+
+        var confirmedCount = await _bookingRepository.CountByEventTermIdAndStatusAsync(eventTermId, BookingStatus.CONFIRMED);
+        var status = confirmedCount < eventTerm.MaxParticipants ? BookingStatus.CONFIRMED : BookingStatus.WAITLISTED;
 
         var booking = new Booking
         {
             FamilyMemberId = familyMemberId,
             EventTermId = eventTermId,
-            Status = BookingStatus.PENDING
+            Status = status
         };
 
         var saved = await _bookingRepository.AddAsync(booking);
 
-        var requestedPayload = new BookingRequestedPayload
+        var payload = new BookingCreatedPayload
         {
             BookingId = saved.Id,
             FamilyMemberId = saved.FamilyMemberId,
             EventTermId = saved.EventTermId,
-            Status = saved.Status.ToString(),
-            ParentEmail = parentEmail
+            Status = status.ToString(),
+            ParentEmail = parentEmail,
+            EventName = eventTerm.EventName,
+            TermDate = eventTerm.StartDateTime.ToString(),
+            OrganizationId = eventTerm.OrganizationId,
+            Amount = eventTerm.Price
         };
-        await _bookingEventProducer.PublishBookingRequestedAsync(requestedPayload);
+        await _bookingEventProducer.PublishBookingCreatedAsync(payload);
 
         return BookingResponse.From(saved);
     }
